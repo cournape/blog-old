@@ -1,0 +1,172 @@
+Toydist 0.0.2 has just been announced, and since this is the first public
+release since I announced it at Scipy India 2009, I thought it would be the
+occasion of summarizing the current status of toydist, and where I see it going
+the next few months.
+
+Toydist is an experimental alternative to distutils/setuptools, and aims at
+replacing the whole packaging infrastructure for python softwares, without
+requiring people to throw away their current infrastructure. The main
+philosophy of toydist is simplicity + extensibility:
+
+        * simple: it should be simpler than distutils for simple packages, to
+          the point where it is difficult to get it wrong. Although packaging
+          *is* difficult, there are known good practices, and the tools should
+          at least hint at those practices.
+        * extensible: it should be possible to do things as complex as wanted
+          in some parts of packaging, while still benefiting from toydist
+          capabilities otherwise.
+         
+In other words, making toydist more pythonic, with OOWTDI, without getting in
+your way.
+
+The present
+===========
+
+The focus of this first release has been the design of a declarative package
+description, and implementing just enough features so that toydist can install
+itself. A simple command line interface, called toymaker, is provided as well.
+Installing a package with toymaker is very similar to the autotools' way::
+
+        toymaker configure 
+        toymaker build
+        toymaker install
+        toymaker sdist # Assemble a tarball
+
+I have also implemented preliminary support to build eggs and windows
+installers (.exe-based), through the build_egg and build_wininst commands.
+
+This first release also brings a few distribution-related features which have
+been big pain points in distutils/setuptools. First, the flexibility of
+autotools installation scheme is available at configuration stage::
+
+        toymaker configure --prefix=somepath --libdir=someotherpath --mandir=yetanotherpath
+
+works as expected, and every customized path is available inside toydist from
+the beginning, instead of being available only at install time as in distutils.
+
+Secondly, data files are correctly handled, instead of the
+distutils/setuptools' mess. Toydist makes the difference between extra source
+files, which are not intended to be installed (say .rst source documentation),
+and data files which are installed. For the later, you can declare as many data
+files sections as possible, and each data file section potentially has a
+different installation path::
+
+        DataFiles: manpath
+            SourceDir: doc/
+            TargetDir: $manpath
+            Files: man1/foo.1, man3/foo.3
+
+This syntax, inspired from automake, will cause doc/man1/foo.1 to be installed
+as $manpath/man1/foo.1 and doc/man3/foo.3 as $manpath/man3/foo.3. As the
+TargetDir field accepts non-expanded path variables, and because you can define
+new path variables, you can be as flexible as possible.
+
+For toydist to be successfull at all, transition from a setup.py-based build
+must be straightforward. For simple packages, this is as simple as::
+
+        toymaker convert
+
+inside the same directory as setup.py. Packages such as Jinja2 and Sphinx can
+already be converted pretty accurately using this method. Packages which rely
+heavily on distutils extensions, like NumPy or Twisted will most likely never
+be convertible this way.
+
+As there is a lot of existing infrastructure based on distutils (and
+setuptools), with tools like virtualenv, pip or buildout, going from toydist to
+setup.py is also desirable. This can be done manually at the moment::
+
+        from distutils.core import setup
+        from toydist.core import PackageDescription
+
+        pkg = PackageDescription.from_file("toysetup.info")
+
+        DESCR = pkg.description
+        CLASSIFIERS = pkg.classifiers
+
+        METADATA = {
+                'name': pkg.name,
+                'version': pkg.version,
+                'description': pkg.summary,
+                'url': pkg.url,
+                'author': pkg.author,
+                'author_email': pkg.author_email,
+                'license': pkg.license,
+                'long_description': pkg.description,
+                'platforms': 'any',
+                'classifiers': pkg.classifiers,
+        }
+
+        PACKAGE_DATA = {
+                'packages': pkg.packages,
+                },
+        }
+
+        if __name__ == '__main__':
+                config = {}
+                for d in (METADATA, PACKAGE_DATA):
+                        for k, v in d.items():
+                                config[k] = v
+                setup(**config)
+
+Toydist own setup.py is basically as above. The next version of toydist will
+have a distutils compatibility layer so that this will look as follows ::
+
+        from toydist.distutils_compat import setup
+
+        if __name__ == '__main__':
+                setup("toysetup.info")
+
+Depending on the required compatibility level with distutils, one can write
+distutils command to support some toydist features.
+
+What's coming next ?
+====================
+
+Easy interoperation with distutils, setuptools, etc...
+------------------------------------------------------
+
+For toydist 0.0.3, I intend to add support for a single-file distribution of
+toydist, ala waf. Integrating the full code of the packaging program in a
+source distribution is sometimes quite useful in my experience (that's how
+autotools manage its cross-platformness that to a some degree), and this would
+make distributing toydist-enabled packages easier.
+
+Except on windows, it should be possible to make this single bootstrapping file
+not bigger than 100-200 kb, so space would not be an issue. Windows needs more
+as building windows installers require binaries which take a lot of space.
+
+Extensibility through commands hooks
+------------------------------------
+
+My minimal threshold to consider toydist succesfull is the ability to build
+numpy and scipy. I am convinced that a packaging tool should leverage existing
+build tools for complex extension builds, be it scons, waf or even the
+venerable make. Toydist started as a prototype to make writing things like
+numscons easier and it is still a major design principle I intend to follow
+throughout toydist development.
+
+I am currently working on a hook API so that any toymaker command can be
+customized in an auxiliary python file. Toydist 0.0.3 will contains examples to
+build simple python C extensions with waf in a couple of lines of code.
+Building extensions with a real build system like waf brings automatic
+dependency handling, parallel builds and other features which are near
+impossible to implement correctly in distutils.
+
+Replacement for pkg_resources
+-----------------------------
+
+There are currently only two ways to retrieve data files from an installed
+python package: through __file__ and pkg_resources. __file__ has the advantage
+of simplicity, but it is inflexible. pkg_resources is too complicated, and
+signicantly slows down everything which uses it, and I have no use for its
+other features (plugins).
+
+Using something akin to autoheader to install-time generated data locations
+should be easy to implement:
+
+        * no more imports slown down imports times (pkg_resources can easily
+          increase import times by a factor of 2 to 3)
+        * much more robust, without the possibility to break other packages
+          (pkg_resources is a single point of failure for every package which
+          uses it - I have had some experience where installing one setuptools
+          package broke unrelated existing packages on my system).
