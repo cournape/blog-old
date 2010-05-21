@@ -1,0 +1,51 @@
+[EDIT] Of course, just after having written this post, I came across two
+interesting projects: [mem] [1] and [fbuild] [2]. That's what I get for not
+having Internet for weeks now ... Both projects are based on memoization
+instead of a dependency graph, and seem quite advanced feature-wise.
+Unfortunately, fbuild requires python 3.1. Maybe mem would do. If so, consider
+yaku dead[/EDIT]
+
+While working on toydist, I was considering re-using distutils ability to build
+C code at first, with the idea that people would use waf/scons/etc... if they
+have involved compilation needs. But distutils is so horrendous that I realized
+that implementing something significantly better and simpler would be possible.
+After a few hours of coding, I had something which could build extensions on a
+few platforms: [yaku] [3] ("bake" in Japanese).
+
+Yaku main design goal is simplicity: I don't want the core code to be more than
+~ 1000 LOC. Fortunately, this is more than enough to create something
+significantly better than distutils. The current codebase is strongly inspired
+by waf (and scons to some extent), and has the following features:
+
+  * Task-based: a yaku task is like a rule in make, with a list of
+    targets, dependencies, and a list of executable commands
+  * Each task knows about its environment (e.g. flags for C compilation),
+    and environment changes as well as dependencies changes trigger a
+    task (re)-execution
+  * Extension through callback: adding support for new source files
+    (cython, swig, fortran, etc...) requires neither monkey patching or
+    inheritence. This is one of my biggest grip with distutils
+  * Primitive autoconf-like features to check for header, libraries, etc...
+
+Besides polishing the API, I intend to add the following features:
+
+  * Parallel build
+  * Automatically find header dependencies for C/C++ code (through
+    scannning sources)
+
+I want to emphasize that yaku is not meant as a replacement for a real build
+tool. To keep it simple, yaku has no abstraction of the filesystem (node
+concept in scons and waf), which has serious impact on the reliability and
+power as a build tool. The graph of dependencies is also built in one shot, and
+cannot be changed dynamically (so yaku won't ever be able to detect dependency
+on generated code, for example foo.c which depends on foo.h generated from
+foo.h.in).
+
+Nevertheless, I believe yaku's features are significant enough to warrant the
+project. If the project takes off, it may be possible to integrate yaku within
+the Distribute project, for example, whereas integrating waf or scons is out of
+the question.
+
+  [1]: http://github.com/srp/mem
+  [2]: http://git.felix-lang.org/?p=fbuild.git;a=summary
+  [3]: http://github.com/cournape/yaku
