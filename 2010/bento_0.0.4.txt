@@ -1,0 +1,118 @@
+I initially intended to release the new version (0.0.4) of bento around mid-end
+of August, but it now seems like end of september is more likely. The reason is
+that I have been working pretty hard on bento and yaku for complex builds in
+the last few weeks, where complex means numpy/scipy.
+
+The main reason for making scipy buildable with bento is to get a "feel" of how
+really extensible bento is. I think that since 0.0.3, bento is fairly usable,
+but extensibility is really what bento is about. The only way that I know to
+have an extensible design is to actually extend it in as many scenario as
+possible, and as far as complex distutils-based build go, scipy is a pretty
+good scenario.
+
+The bottom line: I expect a **fully working bento build of scipy within a few
+days** (most hairy fortran stuff now builds and run the tests ok)
+
+### Major changes from 0.0.3
+
+No backward-incompatible changes are required for the bento.info format. The
+major change is recursive package support, which ended up being more complex
+than anticipated. I already described this feature in a previous post: it
+mostly boils down to splitting a big bento.info into several "sub-bento" files
+in subdirectories.
+
+Implementation-wise, it required a redesign of internal representation for
+files. The issue is how to know that two file names represent the same files: I
+quickly realize that using filenames is too complex and too fragile, and I
+decided to re-use the Node class from waf, which builds an internal
+representation of the filesystem. The conversion is still going on, but it
+simplified a lot of hairy code that I used to write in bento (and distutils
+previously). It particularly helps to compute the relative paths between too
+paths:
+
+	relpos = node.path_from(othernode)
+
+If node is /foo/bar and othernode is /foo, relpos will be bar, and .. if node
+and othernode are inverted. Doing this from the filenames alone has many
+corner cases, and path name computation are surprisingly slow on python (waf
+Node class caches things like absolute path name computation).
+
+Thanks to the waf Node class, I can now easily list the packages, extensions,
+etc... specific to one sub bento, relatively to the sub bento directory, and
+translates packages, extensions, etc... as seen from the top directory.
+
+I am happy with the internals, but the "API" for recursive build description is
+not good, to put it mildly. To add a subpackage description with associated
+bscript (hook file), you need to:
+
+  * add the sub bento.info to the Subento field in the parent bento.info
+  * add the bscript file into the list of the recursive decorator inside
+    the parent bscript file. Even though the decorator may be put on e.g.
+    the configure hook, the build command will also look there for sub
+    bscript files, which is not intuitive at all.
+
+You can see some examples
+[there](http://github.com/cournape/Bento/tree/master/examples/recursive)
+I am still looking for a good solution to this issue.
+
+### Yaku enhancements
+
+Except for recursive package description, not much has changed in bento, and
+most of the work has happened in yaku. The first big change is that yaku itself
+also uses a waf-like Node class: although I resisted this at first, I think it
+is for the best, and it also simplified a lot of hairy corner cases inside
+yaku.
+
+The other big change in yaku is overriding/extending it. I am interested in the
+following cases:
+
+  * adding new tool (clang, intel compiler, etc...)
+  * adding a new process in the chain (say building extensions from .c.src
+    instead of .c without monkey-patching original code)
+  * overriding flags for some extensions (say building one extension with -Os
+    instead of -O2)
+  * overriding extension hook for some extensions. For example in general,
+    fortran source files are compiled into .o directly for "pure" (not using
+    python C API) libraries, but f2py allows to build a python extension from
+    the .f directly. Yaku now allows for temporary overriding the command
+    associated to .f file
+
+Now, **all those four cases are implemented**. Chaining a templating system to
+cython (for .pyx.in -> .pyx -> .c -> .o -> .so/.pyd) is now very simple,
+supporting new compilers can be done easily, and playing with compiling options
+straightforward internally.  There are a few issues, though.  Besides how the
+API should look like, a corny situation is dealing with dictionaries of
+configurations. In yaku, each task has an environment attached to it, which is
+a simple dictionary containing things like CFLAGS, CC, etc...  Most of the
+time, you want to share those dictionaries across tasks.  Unfortunately, python
+semantics for dictionaries don't make that easy, and deepcopy is too expensive.
+A Copy-On-Write dictionary, which internally share common parts between
+dictionaries, would be ideal, but I am afraid implementing one in python would
+be very difficult.
+
+I am also still not entirely convinced that yaku is warranted:
+[fbuild](http://github.com/erickt/fbuild) is nearly the ideal system if it were
+not limited to python 3, and the new waf 1.6 looks great (T. Nagy, the waf
+maintainer, recently updated fortran support for 1.6). Fortunately, bento is
+build-tool agnostic from the start, and trying waf inside bento for a real
+project is on the TODO list.
+
+### Other bento features
+
+I put an hold on other features planned for 0.0.4. The main missing features
+for bento are:
+
+  * distutils compatibility mode (so that bento.info may be used within distutils)
+  * wininst <-> egg conversion
+  * good documentation
+  * python 3 compatibility
+  * virtualenv and pip support 
+  * automatic command dependency (e.g. automatically re-run configure before
+    build if necessary)
+
+Python 3 support will definitely not go into 0.0.4. Virtualenv/pip support
+should not be difficult, automatic dependency for commands is badly needed.
+
+All being said, I think bento is shaping up quite ok. At my work, I constantly
+have to deal with distutils idiosyncraties for the most trivial things, and I
+am looking forward to seeing it replaced with something saner.
