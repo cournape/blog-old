@@ -1,0 +1,95 @@
+I could not spend much time (if any) on bento the last few weeks of 2010, but I
+fortunately got back some time to work on it this month. It is a good time to
+describe a bit what I hope will happen in bento in the next few months.
+
+### Bento poster @ Pycon2011
+
+First, my bento proposal has been rejected for PyCon 2011, so it will only be
+presented as a poster. It is a bit unfortunate because I think it would have
+worked much better as a talk than as a poster. Nevertheless, I hope it will
+help bringing awareness of bento outside the scipy community, and give me a
+better understanding of people's need for packaging (poster should be better
+for the latter point).
+
+### Bento 0.0.5
+
+Bento 0.0.5 should be coming soon (mid-february). Contrary to the 0.0.4
+release, this version won't bring major user-visible features, but it got a lot
+of internal redesigns to make bento easier to use:
+
+#### Automatic command dependency
+
+One does not need to run each command separately anymore. If you run
+"bentomaker install", it will automatically run configure and build on its own,
+in the right order.  What's interesting about it is how dependencies are
+specified. In distutils, subcommand order is hardcoded inside the parent
+command, which makes it virtually impossible to extend them. Bento does not
+suffer from this major deficiency:
+
+    * Dependencies are specified outside the classes: you just need to say
+      which class must be run before/after
+    * Class order is then computed at *run time* using a simple topological
+      sort. Although the API is not there yet, this will enable arbitrary
+      insertion of new commands between existing commands without the need to
+      monkey patch anything
+
+#### Virtualenv support
+
+If a bento package is installed under virtualenv, the package will be
+installed inside the virtualenv by default:
+
+    virtualenv .env
+    source .env/bin/activate
+    bentomaker install # this will install the package inside the virtualenv
+
+Of course, if the install path has been customized (through prefix/eprefix),
+those take precedence over virtualenv.
+
+#### List files to be installed
+
+The install command can optionally print the list of files to be installed and
+their actual installation path. This can be used to check where things are
+installed. This list is exactly what bento would install by design, so it is
+more difficult to have weird corner cases where the list and what is actually
+installed is different.
+
+#### First steps toward uninstall
+
+Initial "transaction-based" install is available: in this mode, a transaction
+log will be generated, which can be used to rollback an install. For example,
+if the install fails in the middle, already installed files will be removed to
+keep the system in a clean state. This is a first step toward uninstall support.
+
+#### Refactoring to help using waf inside bento
+
+Bento's internal have been improved to enable easier customization of the build
+tool. I have a proof of concept where bento can be customized to 
+[use waf to build extensions](https://github.com/cournape/Bento/blob/master/examples/hooks/waf/waf16).
+The whole point is to be able to do so without changing bento's code itself, of
+course. The same scheme can be used to [build extensions with distutils](https://github.com/cournape/Bento/blob/master/examples/hooks/distutils/)(for
+compatibility reasons, to help complex packages to move to bento one step at a time.
+
+### Bentoshop: a framework to manage installed packages
+
+I am hoping to have at least a proof of concept for a package manager based
+around bento for Pycon 2011. As already stated on this blog, there are few
+non-negotiable features that the design must follow:
+
+    1. Robust by design: things that can be installed can be removed, avoid
+       synchronisation issues between metadata and installed packages
+    2. Transparent: it should play well with native packaging tools and not go
+       in the way of anyone's workflow.
+    3. No support whatsoever for multiple version: this can be handled with
+       virtualenv for trivial cases, and through native "virtualization" scheme
+       when virtualenv is not enough (chroot for fs "virtualziation", or actual
+       virtual machines for more)
+    4. Efficient
+
+This means PEP376 is out of the question (it breaks points 1 and 4). I will
+follow a first proof of concept following the haskell cabal and R (CRAN)
+systems, but backed with a db for performances.
+
+The main design issue is point 2: ideally, one would want a user-specific,
+python-specific package manager to be aware of packages installed through the
+native system, but I am not sure it is really possible without breaking other
+points.
