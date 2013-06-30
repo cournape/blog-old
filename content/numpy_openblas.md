@@ -1,3 +1,10 @@
+Title: Building numpy with OpenBLAS
+Date: 2012-10-12 10:20
+Category: Python
+Tags: numpy, bento
+Author: David Cournapeau
+Summary: instructions to build numpy with bento
+
 This is a quick post to show how to build NumPy/SciPy with [OpenBlas](https://github.com/xianyi/OpenBLAS)
 on Mac OS X.  OpenBlas is a recently
 open-sourced version of Blas/Lapack that is competitive with the proprietary
