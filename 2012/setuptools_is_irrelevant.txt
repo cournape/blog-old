@@ -1,0 +1,67 @@
+It is that time of the year where packaging questions resurface in the open (on
+[python-dev](http://mail.python.org/pipermail/python-dev/2012-June/120431.html)
+and by [Armin](http://lucumr.pocoo.org/2012/6/22/hate-hate-hate-everywhere/))
+
+Armin wrote an article on why he loves setuptools, and one of the main takeaway
+of his text is that one should not replace X with Y without understanding why X
+was created in the first place. There is another takeaway, though: none of the
+features Armin mentioned matters much to me. This is not to say they are not
+important: given the success of setuptools or pip, it would be stupid not to
+recognize they fulfill an important gap for a lot of people.
+
+#### About tradeoffs
+
+But while those solutions *provide* a useful set of features, it is important
+to realize what they *prevent* as well. Nick touches this topic a bit on
+python-dev (http://code.activestate.com/lists/python-dev/116478/), but I mean
+something a bit different here. Some examples:
+
+  * First, the way setuptools install eggs by adding things to sys.path
+    caused a lot of additional stat on the filesystem. In the scientific
+    community (and in corporate environments as well), people often have to
+    use NFS. This can cause import speed to take a lot of time (above 1
+    minute is not unheard of).
+  * Setuptools monkey patches distutils. This has a serious consequence
+    for people who have their own distutils extensions, since you essentially
+    have to deal with two code paths for anything that setuptools monkey
+    patches.
+
+As mentioned by Armin, setuptools had to do the the things it did to support
+multi-versioning. But this means that it has a significant cost for people who
+do not care about having multiple versions of the same package. This matters
+less today than it used to, though, thanks for virtual env, and pip
+that installs things as non-eggs.
+
+Similar argument can be made about monkey-patching: distutils is not designed
+to be extensible, especially because of how commands are tightly coupled
+together. You effectively can NOT extend distutils without monkey-patching it
+significantly.
+
+#### Hackable solutions
+
+A couple of years ago, I decided that I could not put up with numpy.distutils
+extensions and the aforementioned distutils issues anymore. I started working
+on Bento sometimes around fall 2009 (bento:
+https:://cournape.github.com/Bento), with the intend to bootstrap it by reusing
+the low-level distutils code, and getting rid of commands and distribution. I
+also wanted to experiment with simpler solutions to some more questionable
+setuptools designs such as data resource with pkg_resources.
+
+I think hackable solutions are the key to help people solving packaging
+solution(s). There is no unique solution, because the usecases are so different
+and clash with each other. Personally, having a system that works like apt-get
+(reliable and fast metadata search, reliable install/uninstall, etc...) is the
+holy grail, but I understand that that's not what other people are after.
+
+What matters the most is to only put in the stdlib what is uncontroversial and
+battle-tested in the wild. Tarek's and the rest of the packaging team efforts
+to specify and write PEP around the metadata are a very good step in that
+direction. The PEP for metadata works well because it essentially specify
+things that have been used succesfully (and relatively uncontroversial).
+
+But an elusive PEP around compilers as has been suggested is not that
+interesting IMO: I could write something to point every API issues with how
+compilation work in distutils, but that sounds pointless without a proposal for
+a better system. And I don't want to design a better system, I want to be able
+to *use* one (waf, scons, fbuilt, gyp, whatever). Writing bento is my way of
+discovering a good design to do just that.
